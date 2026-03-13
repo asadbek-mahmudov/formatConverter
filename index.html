@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Format Converter — LMS ↔ Moodle</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080c14;
+  --s1:       #0f1624;
+  --s2:       #162032;
+  --s3:       #1e2d47;
+  --border:   #243451;
+  --border2:  #304570;
+  --text:     #cdd9f0;
+  --muted:    #5a7299;
+  --accent:   #10c98a;
+  --accentD:  #0a7a55;
+  --warn:     #f5a623;
+  --err:      #f25757;
+  --tag:      #3d5a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+
+/* ── HEADER ── */
+header{padding:20px 32px 0;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border);padding-bottom:0}
+.logo{width:36px;height:36px;display:grid;place-items:center;flex-shrink:0}
+.app-title{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.app-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.tabs{margin-left:auto;display:flex;gap:2px}
+.tab{padding:10px 20px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── MAIN ── */
+main{padding:28px 32px;max-width:1200px;margin:0 auto}
+.panel{display:none}.panel.active{display:block}
+
+/* ── CARDS ── */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:22px;margin-bottom:18px}
+.card-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title .badge{background:var(--s3);border:1px solid var(--border2);border-radius:4px;padding:2px 8px;font-size:11px;text-transform:none;color:var(--text)}
+
+/* ── UPLOAD ZONE ── */
+.upload-zone{border:2px dashed var(--border2);border-radius:8px;padding:36px;text-align:center;cursor:pointer;transition:all .2s;background:var(--s2)}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--accentD)22}
+.upload-zone input[type=file]{display:none}
+.upload-icon{font-size:32px;margin-bottom:10px;opacity:.5}
+.upload-label{font-weight:500;color:var(--text);margin-bottom:4px}
+.upload-hint{font-size:12px;color:var(--muted)}
+.file-loaded{border-color:var(--accent);background:var(--accentD)22}
+.file-loaded .upload-icon{opacity:1}
+
+/* ── PREVIEW ── */
+.preview-box{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:14px 16px;font-family:'IBM Plex Mono',monospace;font-size:12px;max-height:180px;overflow-y:auto}
+.block-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)}
+.block-row:last-child{border:none}
+.block-name{font-weight:600;color:var(--accent);min-width:200px}
+.block-count{color:var(--muted)}
+
+/* ── SETTINGS ── */
+.settings-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);font-size:13px;padding:10px 0;user-select:none;transition:color .2s}
+.settings-toggle:hover{color:var(--text)}
+.toggle-arrow{transition:transform .2s}
+.settings-toggle.open .toggle-arrow{transform:rotate(90deg)}
+.settings-body{display:none;padding-top:14px}
+.settings-body.open{display:block}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group label{font-size:12px;color:var(--muted);font-weight:500}
+.form-group input,.form-group select{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;color:var(--text);font-family:inherit;font-size:13px;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
+.form-group input[type=text]{font-family:'IBM Plex Mono',monospace}
+
+/* ── BLOCK TABLE ── */
+.block-table{width:100%;border-collapse:collapse;margin-top:8px}
+.block-table th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border);background:var(--s2)}
+.block-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.block-table tr:last-child td{border:none}
+.block-table input{background:var(--s3);border:1px solid var(--border2);border-radius:4px;padding:5px 8px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;width:100%;transition:border-color .2s}
+.block-table input:focus{outline:none;border-color:var(--accent)}
+.block-table .orig{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text)}
+.block-table .cnt{color:var(--muted);font-size:12px;text-align:center}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;border:none;transition:all .2s;font-family:inherit}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:#0ee07a;transform:translateY(-1px)}
+.btn-primary:disabled{background:var(--accentD);color:var(--muted);cursor:not-allowed;transform:none}
+.btn-secondary{background:var(--s3);color:var(--text);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-warn{background:var(--warn)22;color:var(--warn);border:1px solid var(--warn)44}
+.btn-warn:hover{background:var(--warn)33}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px}
+
+/* ── STATUS ── */
+.status{padding:12px 16px;border-radius:6px;font-size:13px;margin-top:12px;display:none}
+.status.show{display:flex;align-items:flex-start;gap:10px}
+.status-ok{background:var(--accent)15;border:1px solid var(--accent)44;color:var(--accent)}
+.status-err{background:var(--err)15;border:1px solid var(--err)44;color:var(--err)}
+.status-warn{background:var(--warn)15;border:1px solid var(--warn)44;color:var(--warn)}
+
+/* ── VALIDATION ── */
+.val-item{padding:10px 14px;border-radius:6px;margin-bottom:8px;font-size:13px;border-left:3px solid}
+.val-err{background:var(--err)12;border-color:var(--err);color:var(--text)}
+.val-warn{background:var(--warn)12;border-color:var(--warn);color:var(--text)}
+.val-ok{background:var(--accent)12;border-color:var(--accent);color:var(--text)}
+.val-label{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.val-err .val-label{color:var(--err)}
+.val-warn .val-label{color:var(--warn)}
+.val-ok .val-label{color:var(--accent)}
+
+/* ── 2-col layout ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:800px){.two-col{grid-template-columns:1fr}.tabs{overflow-x:auto}}
+
+/* ── misc ── */
+.divider{height:1px;background:var(--border);margin:16px 0}
+.pill{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;font-family:'IBM Plex Mono',monospace}
+.pill-green{background:var(--accent)22;color:var(--accent)}
+.pill-gray{background:var(--s3);color:var(--muted)}
+.pill-warn{background:var(--warn)22;color:var(--warn)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.mono{font-family:'IBM Plex Mono',monospace}
+.stats-row{display:flex;gap:24px;flex-wrap:wrap;padding:12px 0}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat-val{font-size:22px;font-weight:600;color:var(--accent);font-family:'IBM Plex Mono',monospace}
+.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.note{font-size:12px;color:var(--muted);background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-top:10px;line-height:1.7}
+.note::before{content:"ℹ ";color:var(--accent)}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--border);padding:14px 32px;display:flex;align-items:center;gap:6px;justify-content:center}
+.footer-logo{opacity:.5;display:flex;align-items:center}
+.footer-text{font-size:11px;color:var(--muted);letter-spacing:.01em}
+.footer-text a{color:var(--muted);text-decoration:none;transition:color .2s}
+.footer-text a:hover{color:var(--accent)}
+.footer-sep{color:var(--border2);margin:0 6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="pg" x1="8" y1="98" x2="88" y2="8" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#f04e18"/>
+          <stop offset="55%" stop-color="#e03a80"/>
+          <stop offset="100%" stop-color="#c838c0"/>
+        </linearGradient>
+      </defs>
+      <rect x="4" y="34" width="63" height="63" rx="16" fill="url(#pg)"/>
+      <rect x="58" y="4" width="34" height="34" rx="10" fill="url(#pg)"/>
+    </svg>
+  </div>
+  <div>
+    <div class="app-title">Format Converter</div>
+    <div class="app-sub">LMS ↔ Moodle</div>
+  </div>
+  <nav class="tabs">
+    <div class="tab active" onclick="switchTab('lms2moodle')">LMS → Moodle</div>
+    <div class="tab" onclick="switchTab('moodle2lms')">Moodle → LMS</div>
+    <div class="tab" onclick="switchTab('validate')">Check for Mistakes</div>
+  </nav>
+</header>
+
+<main>
+
+<!-- ══════════════════════════════════════════════
+     TAB 1: LMS → MOODLE
+═══════════════════════════════════════════════ -->
+<div id="panel-lms2moodle" class="panel active">
+  <div class="two-col">
+
+    <div>
+      <div class="card">
+        <div class="card-title">① Upload LMS File</div>
+        <div class="upload-zone" id="drop-lms" onclick="document.getElementById('file-lms').click()">
+          <input type="file" id="file-lms" accept=".xlsx" onchange="loadLMS(this)">
+          <div class="upload-icon" id="icon-lms">📂</div>
+          <div class="upload-label" id="label-lms">Drop or click to upload LMS .xlsx</div>
+          <div class="upload-hint">Expects sheets: Question, Feedback, Objectives</div>
+        </div>
+        <div class="status" id="status-lms-load"></div>
+      </div>
+
+      <div class="card" id="card-lms-preview" style="display:none">
+        <div class="card-title">Detected Content <span class="badge" id="lms-q-count">—</span></div>
+        <div class="stats-row">
+          <div class="stat"><div class="stat-val" id="stat-lms-q">—</div><div class="stat-lbl">Questions</div></div>
+          <div class="stat"><div class="stat-val" id="stat-lms-b">—</div><div class="stat-lbl">Blocks</div></div>
+          <div class="stat"><div class="stat-val" id="stat-lms-a">—</div><div class="stat-lbl">Answers total</div></div>
+        </div>
+        <div class="preview-box" id="lms-block-list"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" id="card-lms-settings">
+        <div class="card-title">② Configure Output <span style="margin-left:auto;font-size:11px;font-weight:400;color:var(--muted)">(optional adjustments)</span></div>
+
+        <!-- Sheet name -->
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Kérdések Sheet Name</label>
+          <input type="text" id="lms-sheet-name" value="Kérdések" placeholder="Kérdések">
+        </div>
+
+        <div class="settings-toggle" id="toggle-lms-adv" onclick="toggleSettings('lms-adv','toggle-lms-adv')">
+          <span class="toggle-arrow">▶</span>
+          <span>Block names &amp; exam parameters</span>
+        </div>
+        <div class="settings-body" id="lms-adv">
+          <div class="form-grid" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Exam Duration (A vizsga időtartama)</label>
+              <input type="text" id="lms-exam-dur" placeholder="e.g. 25 perc">
+            </div>
+          </div>
+
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Block names &amp; question selection for Adatok sheet:</div>
+          <table class="block-table" id="lms-block-table">
+            <thead><tr>
+              <th>Block Code (from QID)</th>
+              <th>Moodle Name</th>
+              <th># Qs</th>
+              <th>Selected for exam</th>
+            </tr></thead>
+            <tbody id="lms-block-tbody"></tbody>
+          </table>
+          <div class="note">Block header rows will have green background, question rows light blue, and answer correctness color-coded — all applied automatically.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">③ Convert &amp; Download</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-lms2moodle" onclick="convertLMS2Moodle()" disabled>⬇ Convert to Moodle</button>
+        </div>
+        <div class="status" id="status-lms2moodle"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     TAB 2: MOODLE → LMS
+═══════════════════════════════════════════════ -->
+<div id="panel-moodle2lms" class="panel">
+  <div class="two-col">
+
+    <div>
+      <div class="card">
+        <div class="card-title">① Upload Moodle File</div>
+        <div class="upload-zone" id="drop-moodle" onclick="document.getElementById('file-moodle').click()">
+          <input type="file" id="file-moodle" accept=".xlsx" onchange="loadMoodle(this)">
+          <div class="upload-icon" id="icon-moodle">📂</div>
+          <div class="upload-label" id="label-moodle">Drop or click to upload Moodle .xlsx</div>
+          <div class="upload-hint">Expects sheets: Kérdések (or topic sheet), Adatok, Formai követelmények</div>
+        </div>
+        <div class="status" id="status-moodle-load"></div>
+      </div>
+
+      <div class="card" id="card-moodle-preview" style="display:none">
+        <div class="card-title">Detected Content <span class="badge" id="moodle-q-count">—</span></div>
+        <div class="stats-row">
+          <div class="stat"><div class="stat-val" id="stat-moodle-q">—</div><div class="stat-lbl">Questions</div></div>
+          <div class="stat"><div class="stat-val" id="stat-moodle-b">—</div><div class="stat-lbl">Blocks</div></div>
+          <div class="stat"><div class="stat-val" id="stat-moodle-a">—</div><div class="stat-lbl">Answers total</div></div>
+        </div>
+        <div class="preview-box" id="moodle-block-list"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-title">② Configure Output <span style="margin-left:auto;font-size:11px;font-weight:400;color:var(--muted)">(optional adjustments)</span></div>
+
+        <div class="form-grid" style="margin-bottom:14px">
+          <div class="form-group">
+            <label>Question ID Prefix</label>
+            <input type="text" id="moodle-prefix" placeholder="e.g. cdc_ai_funda or SEATURTLE" class="mono">
+          </div>
+          <div class="form-group">
+            <label>Locale ID</label>
+            <input type="text" id="moodle-locale" value="English" placeholder="English / Hungarian">
+          </div>
+          <div class="form-group">
+            <label>Domain ID</label>
+            <input type="text" id="moodle-domain" value="OTP Bank Nyrt." placeholder="OTP Bank Nyrt.">
+          </div>
+        </div>
+
+        <div class="settings-toggle" id="toggle-moodle-adv" onclick="toggleSettings('moodle-adv','toggle-moodle-adv')">
+          <span class="toggle-arrow">▶</span>
+          <span>Block codes (used in Question IDs)</span>
+        </div>
+        <div class="settings-body" id="moodle-adv">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Auto-derived — edit if needed. Format: short_code (used as PREFIX_CODE_01):</div>
+          <table class="block-table" id="moodle-block-table">
+            <thead><tr>
+              <th>Moodle Block Name</th>
+              <th>Block Code</th>
+              <th># Qs</th>
+            </tr></thead>
+            <tbody id="moodle-block-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">③ Convert &amp; Download</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-moodle2lms" onclick="convertMoodle2LMS()" disabled>⬇ Convert to LMS</button>
+        </div>
+        <div class="status" id="status-moodle2lms"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     TAB 3: VALIDATE
+═══════════════════════════════════════════════ -->
+<div id="panel-validate" class="panel">
+  <div class="two-col">
+    <div>
+      <div class="card">
+        <div class="card-title">Upload File to Validate</div>
+        <div class="upload-zone" id="drop-val" onclick="document.getElementById('file-val').click()">
+          <input type="file" id="file-val" accept=".xlsx" onchange="loadValidate(this)">
+          <div class="upload-icon" id="icon-val">📂</div>
+          <div class="upload-label" id="label-val">Drop or click — LMS or Moodle .xlsx</div>
+          <div class="upload-hint">Automatically detects format</div>
+        </div>
+        <div class="status" id="status-val-load"></div>
+        <div style="margin-top:14px" class="btn-row">
+          <button class="btn btn-warn" id="btn-validate" onclick="runValidation()" disabled>🔍 Check for Mistakes</button>
+        </div>
+      </div>
+
+      <div class="card" style="font-size:13px;color:var(--muted)">
+        <div class="card-title">Rules Checked (Formai követelmények)</div>
+        <div style="display:grid;gap:8px;line-height:1.6">
+          <div><span class="pill pill-warn">Moodle</span> No numbered/lettered prefixes in answers (a., b., 1.)</div>
+          <div><span class="pill pill-warn">Moodle</span> Each answer row has 0 or 1 in Válasz column</div>
+          <div><span class="pill pill-warn">Moodle</span> Standalone % values end with period</div>
+          <div><span class="pill pill-warn">Moodle</span> Standalone IGAZ/HAMIS/TRUE/FALSE end with period</div>
+          <div><span class="pill pill-warn">Moodle</span> No "all of the above"-type answers</div>
+          <div><span class="pill pill-warn">Moodle</span> Multi-correct questions have ≥1 incorrect answer</div>
+          <div><span class="pill pill-warn">Moodle</span> No empty rows in C column between content</div>
+          <div><span class="pill pill-warn">Moodle</span> Question numbers sequential, none missing</div>
+          <div><span class="pill pill-green">LMS</span> Required fields filled</div>
+          <div><span class="pill pill-green">LMS</span> Valid Question Type values</div>
+          <div><span class="pill pill-green">LMS</span> SINGLE_ANSWER has exactly 1 correct</div>
+          <div><span class="pill pill-green">LMS</span> MULTIPLE_ANSWER has ≥1 correct &amp; ≥1 incorrect</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" id="card-val-results" style="display:none">
+        <div class="card-title">Validation Results <span class="badge" id="val-summary">—</span></div>
+        <div id="val-results-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let lmsData   = null; // parsed from LMS file
+let moodleData = null; // parsed from Moodle file
+let valData   = null; // for validation
+let valFormat = null; // 'lms' or 'moodle'
+
+// ── TAB SWITCHING ──────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function toggleSettings(bodyId, toggleId) {
+  const body = document.getElementById(bodyId);
+  const toggle = document.getElementById(toggleId);
+  body.classList.toggle('open');
+  toggle.classList.toggle('open');
+}
+
+// ── DRAG & DROP ────────────────────────────────
+['drop-lms','drop-moodle','drop-val'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (id === 'drop-lms') loadLMSFile(file);
+    else if (id === 'drop-moodle') loadMoodleFile(file);
+    else loadValidateFile(file);
+  });
+});
+
+// ══════════════════════════════════════════════
+// LMS PARSING
+// ══════════════════════════════════════════════
+function loadLMS(input) { loadLMSFile(input.files[0]); }
+function loadLMSFile(file) {
+  if (!file) return;
+  setStatus('status-lms-load', 'loading', '⏳ Reading file…');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      if (!wb.SheetNames.includes('Question'))
+        return setStatus('status-lms-load','err','Missing "Question" sheet. Is this an LMS file?');
+      lmsData = parseLMSWorkbook(wb);
+      renderLMSPreview();
+      document.getElementById('btn-lms2moodle').disabled = false;
+      setStatus('status-lms-load','ok', `✓ Loaded: ${file.name}`);
+      document.getElementById('icon-lms').textContent = '✅';
+      document.getElementById('label-lms').textContent = file.name;
+      document.getElementById('drop-lms').classList.add('file-loaded');
+    } catch(ex) { setStatus('status-lms-load','err','Parse error: '+ex.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseLMSWorkbook(wb) {
+  const ws = wb.Sheets['Question'];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  // headers in row 0
+  const COL = { QID:0,LOCALE:1,DOMAIN:2,ACTIVE:3,VARIANT:6,QTYPE:7,QTEXT:11,ANSNUM:14,ANSVAL:16,ISCORR:19 };
+
+  const questionsMap = {};
+  const order = [];
+  let localeId = 'English', domainId = 'OTP Bank Nyrt.';
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[COL.QID]) continue;
+    const qid = String(r[COL.QID]).trim();
+    if (!questionsMap[qid]) {
+      questionsMap[qid] = {
+        id: qid,
+        locale: r[COL.LOCALE] || 'English',
+        domain: r[COL.DOMAIN] || 'OTP Bank Nyrt.',
+        active: r[COL.ACTIVE] || 'Y',
+        variant: r[COL.VARIANT] || 1,
+        qtype: r[COL.QTYPE] || 'MULTI_CHOICE_SINGLE_ANSWER',
+        text: r[COL.QTEXT] ? String(r[COL.QTEXT]).trim() : '',
+        answers: []
+      };
+      order.push(qid);
+      if (r[COL.LOCALE]) localeId = r[COL.LOCALE];
+      if (r[COL.DOMAIN]) domainId = r[COL.DOMAIN];
+    }
+    const ansVal = r[COL.ANSVAL];
+    const ansNum = r[COL.ANSNUM];
+    if (ansVal !== null && ansVal !== undefined) {
+      const raw = r[COL.ISCORR];
+      const isCorr = (raw === 'Y' || raw === 'y' || raw === 1 || raw === '1' || raw === true) ? 1 : 0;
+      questionsMap[qid].answers.push({
+        num: ansNum || questionsMap[qid].answers.length + 1,
+        text: String(ansVal).trim(),
+        isCorrect: isCorr
+      });
+    }
+  }
+
+  // Group by block
+  const blocksMap = {};
+  const blockOrder = [];
+  for (const qid of order) {
+    const { prefix, blockCode } = extractBlockFromQID(qid);
+    if (!blocksMap[blockCode]) {
+      blocksMap[blockCode] = { code: blockCode, prefix, name: blockCode, questions: [] };
+      blockOrder.push(blockCode);
+    }
+    blocksMap[blockCode].questions.push(questionsMap[qid]);
+  }
+
+  return { questionsMap, order, blocksMap, blockOrder, localeId, domainId };
+}
+
+function extractBlockFromQID(qid) {
+  const parts = qid.split('_');
+  if (parts.length < 3) return { prefix: qid, blockCode: 'block' };
+  // last part = number, second-to-last = block code, rest = prefix
+  const num = parts[parts.length - 1];
+  const blockCode = parts[parts.length - 2];
+  const prefix = parts.slice(0, parts.length - 2).join('_');
+  return { prefix, blockCode, questionNum: parseInt(num, 10) || 1 };
+}
+
+function renderLMSPreview() {
+  const { blocksMap, blockOrder, order, questionsMap } = lmsData;
+  let totalAnswers = 0;
+  order.forEach(qid => totalAnswers += questionsMap[qid].answers.length);
+
+  document.getElementById('stat-lms-q').textContent = order.length;
+  document.getElementById('stat-lms-b').textContent = blockOrder.length;
+  document.getElementById('stat-lms-a').textContent = totalAnswers;
+  document.getElementById('lms-q-count').textContent = `${order.length} questions`;
+  document.getElementById('card-lms-preview').style.display = 'block';
+
+  const listEl = document.getElementById('lms-block-list');
+  listEl.innerHTML = blockOrder.map(bc => {
+    const b = blocksMap[bc];
+    return `<div class="block-row"><span class="block-name">${bc}</span><span class="block-count">${b.questions.length} questions • prefix: ${b.prefix}</span></div>`;
+  }).join('');
+
+  // Populate block settings table
+  const tbody = document.getElementById('lms-block-tbody');
+  tbody.innerHTML = blockOrder.map(bc => {
+    const b = blocksMap[bc];
+    return `<tr>
+      <td class="orig">${bc}</td>
+      <td><input type="text" value="${bc}" id="lms-bname-${bc}" placeholder="Moodle display name"></td>
+      <td class="cnt">${b.questions.length}</td>
+      <td><input type="number" min="1" max="${b.questions.length}" id="lms-bsel-${bc}" placeholder="auto"></td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// MOODLE PARSING
+// ══════════════════════════════════════════════
+function loadMoodle(input) { loadMoodleFile(input.files[0]); }
+function loadMoodleFile(file) {
+  if (!file) return;
+  setStatus('status-moodle-load','loading','⏳ Reading file…');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      // Find question sheet (not Adatok, not Formai)
+      const qSheet = wb.SheetNames.find(n => n !== 'Adatok' && !n.startsWith('Formai'));
+      if (!qSheet) return setStatus('status-moodle-load','err','Cannot find questions sheet.');
+      moodleData = parseMoodleWorkbook(wb, qSheet);
+      renderMoodlePreview();
+      document.getElementById('btn-moodle2lms').disabled = false;
+      const dirtyCount = moodleData.dirtyB.length;
+      const dirtyNote = dirtyCount ? ` — ⚠ ${dirtyCount} unexpected Válasz value(s) ignored (e.g. "-")` : '';
+      setStatus('status-moodle-load','ok',`✓ Loaded: ${file.name} (questions in "${qSheet}")${dirtyNote}`);
+      document.getElementById('icon-moodle').textContent = '✅';
+      document.getElementById('label-moodle').textContent = file.name;
+      document.getElementById('drop-moodle').classList.add('file-loaded');
+    } catch(ex) { setStatus('status-moodle-load','err','Parse error: '+ex.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseMoodleWorkbook(wb, qSheetName) {
+  const ws = wb.Sheets[qSheetName];
+  if (!ws || !ws['!ref']) return { blocks: [], adatokData: null, qSheetName, dirtyB: [] };
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+
+  function cv(R, C) {
+    const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+    if (!cell) return null;
+    return cell.v !== undefined ? cell.v : null;
+  }
+
+  // Is colB a valid answer marker (0, 1, true, false, "0", "1")?
+  function isAnswerMarker(v) {
+    return v === 0 || v === 1 || v === true || v === false || v === '0' || v === '1';
+  }
+
+  const blocks = [];
+  let currentBlock = null;
+  let currentQuestion = null;
+  const dirtyB = []; // rows where colB had unexpected non-blank content
+
+  for (let R = range.s.r + 1; R <= range.e.r; R++) {
+    const colA = cv(R, 0);
+    const colB = cv(R, 1);
+    const colC = cv(R, 2);
+
+    const aIsNull  = colA === null || colA === undefined || colA === '';
+    // Treat anything that's not a valid answer marker as "blank" for routing purposes
+    const bEffNull = colB === null || colB === undefined || colB === '' || !isAnswerMarker(colB);
+    const cHasVal  = colC !== null && colC !== undefined && String(colC).trim() !== '';
+
+    // Track dirty colB: non-null, non-empty, non-answer-marker values
+    if (colB !== null && colB !== undefined && colB !== '' && !isAnswerMarker(colB)) {
+      dirtyB.push({ row: R + 1, value: colB, context: colC ? String(colC).trim().slice(0, 50) : '' });
+    }
+
+    if (aIsNull && bEffNull && cHasVal) {
+      // Block header row
+      currentBlock = { name: String(colC).trim(), questions: [] };
+      blocks.push(currentBlock);
+      currentQuestion = null;
+
+    } else if (!aIsNull && !isNaN(+colA) && bEffNull && cHasVal) {
+      // Question row
+      currentQuestion = { num: +colA, text: String(colC).trim(), answers: [] };
+      if (!currentBlock) {
+        currentBlock = { name: 'Questions', questions: [] };
+        blocks.push(currentBlock);
+      }
+      currentBlock.questions.push(currentQuestion);
+
+    } else if (aIsNull && isAnswerMarker(colB) && cHasVal) {
+      // Answer row
+      if (currentQuestion) {
+        const isCorr = (colB === 1 || colB === '1' || colB === true) ? 1 : 0;
+        currentQuestion.answers.push({ text: String(colC).trim(), isCorrect: isCorr });
+      }
+    }
+  }
+
+  let adatokData = null;
+  if (wb.SheetNames.includes('Adatok')) {
+    const wa = wb.Sheets['Adatok'];
+    adatokData = XLSX.utils.sheet_to_json(wa, { header: 1, defval: null });
+  }
+
+  return { blocks, adatokData, qSheetName, dirtyB };
+}
+
+function deriveBlockCode(name) {
+  const FILLER = new Set([
+    'AND','OR','THE','A','AN','OF','FOR','IN','AT','BY','TO','WITH',
+    'QUESTIONS','QUESTION','TOPICS','TOPIC','TEST','EXAM','MODULE',
+    'SECTION','PART','UNIT','BLOCK','GROUP','SET','AREA','CHAPTER'
+  ]);
+  const words = name.trim().toUpperCase().split(/[\s,/&+]+/).filter(w => w && !FILLER.has(w));
+  if (!words.length) {
+    // fallback: just take first 8 chars, no spaces
+    return name.trim().toUpperCase().replace(/\s+/g,'').slice(0,8);
+  }
+  if (words.length === 1) return words[0].slice(0,8);
+  // Multi-word: take first 3 chars of each meaningful word, cap at 8
+  return words.map(w => w.slice(0,3)).join('').slice(0,8);
+}
+
+function renderMoodlePreview() {
+  const { blocks } = moodleData;
+  let totalQ = 0, totalA = 0;
+  blocks.forEach(b => { totalQ += b.questions.length; b.questions.forEach(q => totalA += q.answers.length); });
+
+  document.getElementById('stat-moodle-q').textContent = totalQ;
+  document.getElementById('stat-moodle-b').textContent = blocks.length;
+  document.getElementById('stat-moodle-a').textContent = totalA;
+  document.getElementById('moodle-q-count').textContent = `${totalQ} questions`;
+  document.getElementById('card-moodle-preview').style.display = 'block';
+
+  const listEl = document.getElementById('moodle-block-list');
+  listEl.innerHTML = blocks.map(b => `<div class="block-row"><span class="block-name">${b.name}</span><span class="block-count">${b.questions.length} questions</span></div>`).join('');
+
+  // Block code table
+  const tbody = document.getElementById('moodle-block-tbody');
+  tbody.innerHTML = blocks.map((b,i) => {
+    const code = deriveBlockCode(b.name);
+    return `<tr>
+      <td class="orig">${b.name}</td>
+      <td><input type="text" value="${code}" id="moodle-bcode-${i}" class="mono" placeholder="BLOCKCODE"></td>
+      <td class="cnt">${b.questions.length}</td>
+    </tr>`;
+  }).join('');
+
+  // Auto-suggest prefix from Adatok or question texts
+  // Try to detect prefix from adatokData title or leave blank
+  document.getElementById('moodle-prefix').placeholder = 'e.g. cdc_ai_funda or SEATURTLE';
+}
+
+// ══════════════════════════════════════════════
+// EXCELJS STYLE HELPERS
+// ══════════════════════════════════════════════
+
+// ARGB colour constants
+const C = {
+  // Kérdések sheet
+  K_HEADER_BG:   'FF2D4356',  // dark slate header
+  K_HEADER_FG:   'FFFFFFFF',  // white
+  K_BLOCK_BG:    'FF70AD47',  // Excel standard green
+  K_BLOCK_FG:    'FF1A3800',  // dark green text
+  K_Q_BG:        'FFEBF3FB',  // light blue question row
+  K_Q_NUM_FG:    'FF1F3864',  // dark navy number
+  K_ANS_BG:      'FFFFFFFF',  // white
+  K_ANS_CORR:    'FF375623',  // dark green  ✓
+  K_ANS_WRONG:   'FF9C0006',  // dark red    ✗
+  K_ANS_CORR_BG: 'FFE8F5E9',  // pale green tint for correct row
+  // Adatok sheet
+  A_TITLE_FG:    'FF1F3864',
+  A_HDR_BG:      'FF4472C4',  // blue
+  A_HDR_FG:      'FFFFFFFF',
+  A_ROW_ALT:     'FFEEF3FF',  // soft blue alternate
+  A_TOTAL_BG:    'FFFFE699',  // amber total row
+  A_FOOT_BG:     'FFF2F2F2',  // light gray footer section
+  // LMS sheet
+  L_HEADER_BG:   'FF1F3864',  // deep navy
+  L_HEADER_FG:   'FFFFFFFF',
+  L_GROUP_EVEN:  'FFEBF5FF',  // pale blue even group
+  L_GROUP_ODD:   'FFFFFFFF',  // white odd
+  L_CORR_BG:     'FFE8F5E9',  // pale green for Y
+  L_CORR_FG:     'FF1A5C1A',  // dark green
+  L_WRONG_FG:    'FF9C0006',  // dark red
+  // Formai sheet
+  F_TITLE_BG:    'FFD9E1F2',  // light blue-gray
+  F_COL_BG:      'FFEAF0FB',  // very light blue
+  F_RULE_BG:     'FFFFFFFF',
+  F_RULE_ALT:    'FFF9FAFE',
+};
+
+function cellFill(argb) {
+  return { type:'pattern', pattern:'solid', fgColor:{ argb } };
+}
+function cellFont(opts) {
+  return { name:'Calibri', size:11, ...opts };
+}
+function headerFont(opts) {
+  return { name:'Calibri', size:11, bold:true, ...opts };
+}
+function allBorders(style='thin', color='FFD0D8E8') {
+  const s = { style, color:{ argb:color } };
+  return { top:s, left:s, bottom:s, right:s };
+}
+function bottomBorder(style='medium', color='FFAABBCC') {
+  return { bottom:{ style, color:{ argb:color } } };
+}
+
+async function xlsxDownload(wb, fname) {
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ══════════════════════════════════════════════
+// LMS → MOODLE CONVERSION  (ExcelJS styled)
+// ══════════════════════════════════════════════
+async function convertLMS2Moodle() {
+  if (!lmsData) return;
+  const btn = document.getElementById('btn-lms2moodle');
+  btn.disabled = true; btn.textContent = '⏳ Building…';
+
+  try {
+    const { blocksMap, blockOrder } = lmsData;
+    const sheetName = document.getElementById('lms-sheet-name').value.trim() || 'Kérdések';
+    const examDur   = document.getElementById('lms-exam-dur').value.trim();
+
+    const blockSettings = {};
+    for (const bc of blockOrder) {
+      blockSettings[bc] = {
+        name: (document.getElementById(`lms-bname-${bc}`)?.value || bc).trim(),
+        selection: document.getElementById(`lms-bsel-${bc}`)?.value || ''
+      };
+    }
+
+    const EJ = window.ExcelJS;
+    const wb = new EJ.Workbook();
+    wb.creator = 'Quiz Converter'; wb.created = new Date();
+
+    // ── Sheet 1: Kérdések ──────────────────────────
+    const wsK = wb.addWorksheet(sheetName, {
+      properties:{ tabColor:{ argb:'FF70AD47' } },
+      views:[{ state:'frozen', ySplit:1 }]
+    });
+    wsK.columns = [
+      { key:'a', width:10 },
+      { key:'b', width:10 },
+      { key:'c', width:70 },
+      { key:'d', width:20 },
+    ];
+
+    // Header row
+    const hdr = wsK.addRow(['Kérdés','Válasz','Vizsga elnevezése','Visszajelzés']);
+    hdr.height = 22;
+    hdr.eachCell(cell => {
+      cell.fill = cellFill(C.K_HEADER_BG);
+      cell.font = headerFont({ color:{ argb:C.K_HEADER_FG }, size:12 });
+      cell.alignment = { vertical:'middle', horizontal:'center' };
+      cell.border = allBorders('medium','FF1A2D3D');
+    });
+
+    let globalQ = 0;
+    const blockStats = [];
+
+    for (const bc of blockOrder) {
+      const block = blocksMap[bc];
+      const dispName = blockSettings[bc].name;
+      const blockStart = globalQ + 1;
+
+      // Block header row — green
+      const bRow = wsK.addRow([null, null, dispName, null]);
+      bRow.height = 20;
+      bRow.eachCell({ includeEmpty:true }, (cell, col) => {
+        cell.fill = cellFill(C.K_BLOCK_BG);
+        cell.font = headerFont({ color:{ argb:C.K_BLOCK_FG }, size:12 });
+        cell.border = allBorders('thin','FF4A8020');
+        if (col === 3) cell.alignment = { vertical:'middle', indent:1 };
+      });
+
+      for (const q of block.questions) {
+        globalQ++;
+        // Question row — light blue
+        const qRow = wsK.addRow([globalQ, null, q.text, null]);
+        qRow.height = 18;
+        qRow.eachCell({ includeEmpty:true }, (cell, col) => {
+          cell.fill = cellFill(C.K_Q_BG);
+          cell.border = allBorders('thin','FFB8CCE4');
+          if (col === 1) {
+            cell.font = headerFont({ color:{ argb:C.K_Q_NUM_FG } });
+            cell.alignment = { vertical:'middle', horizontal:'center' };
+          } else if (col === 3) {
+            cell.font = cellFont({ bold:false });
+            cell.alignment = { vertical:'middle', wrapText:true };
+          }
+        });
+
+        for (const a of q.answers) {
+          const isCorr = a.isCorrect === 1;
+          const aRow = wsK.addRow([null, a.isCorrect, a.text, null]);
+          aRow.height = 16;
+          aRow.eachCell({ includeEmpty:true }, (cell, col) => {
+            cell.fill = cellFill(isCorr ? C.K_ANS_CORR_BG : C.K_ANS_BG);
+            cell.border = allBorders('hair','FFD8E4F0');
+            if (col === 2) {
+              cell.font = headerFont({ color:{ argb: isCorr ? C.K_ANS_CORR : C.K_ANS_WRONG } });
+              cell.alignment = { vertical:'middle', horizontal:'center' };
+            } else if (col === 3) {
+              cell.font = cellFont({ color:{ argb: isCorr ? C.K_ANS_CORR : 'FF222222' } });
+              cell.alignment = { vertical:'middle', wrapText:true, indent:2 };
+            }
+          });
+        }
+      }
+
+      blockStats.push({
+        name: dispName, count: block.questions.length,
+        start: blockStart, end: globalQ,
+        selection: blockSettings[bc].selection
+      });
+    }
+
+    // ── Sheet 2: Adatok ────────────────────────────
+    const wsA = wb.addWorksheet('Adatok', {
+      properties:{ tabColor:{ argb:'FF4472C4' } }
+    });
+    wsA.columns = [
+      { key:'a', width:48 }, { key:'b', width:24 },
+      { key:'c', width:22 }, { key:'d', width:24 },
+    ];
+
+    // Row 1: blank
+    wsA.addRow([]);
+
+    // Row 2: Title
+    const titleRow = wsA.addRow(['III. verzió   -   Vizsgakérdés csoportos vizsga (Témakör)', null, null, null]);
+    titleRow.height = 24;
+    const tCell = titleRow.getCell(1);
+    tCell.font = { name:'Calibri', size:13, bold:true, italic:true, color:{ argb:C.A_TITLE_FG } };
+    tCell.alignment = { vertical:'middle' };
+
+    // Row 3: blank
+    wsA.addRow([]);
+
+    // Row 4: Table header
+    const aHdr = wsA.addRow(['Csoportok (Témakörök)','Kérdésszámok (adatbázis)','Témakörönkként\ntól-ig','Leválogatás a vizsgára']);
+    aHdr.height = 36;
+    aHdr.eachCell(cell => {
+      cell.fill = cellFill(C.A_HDR_BG);
+      cell.font = headerFont({ color:{ argb:C.A_HDR_FG } });
+      cell.alignment = { vertical:'middle', horizontal:'center', wrapText:true };
+      cell.border = allBorders('medium','FF2A5198');
+    });
+    aHdr.getCell(1).alignment = { vertical:'middle', horizontal:'left', wrapText:true };
+
+    // Topic rows
+    let totalSel = 0;
+    blockStats.forEach((bs, idx) => {
+      const sel = parseInt(bs.selection) || null;
+      if (sel) totalSel += sel;
+      const r = wsA.addRow([bs.name, bs.count, `${bs.start}-${bs.end}`, sel]);
+      r.height = 18;
+      r.eachCell({ includeEmpty:true }, (cell, col) => {
+        cell.fill = cellFill(idx % 2 === 0 ? 'FFFFFFFF' : C.A_ROW_ALT);
+        cell.border = allBorders('thin','FFC5D3E8');
+        cell.alignment = { vertical:'middle', wrapText:true };
+        if (col > 1) cell.alignment = { vertical:'middle', horizontal:'center' };
+        if (col === 4 && sel) { cell.font = headerFont({ color:{ argb:'FF1A3864' } }); }
+      });
+    });
+
+    // Összes kérdés row
+    const totRow = wsA.addRow(['Összes kérdés', globalQ, null, totalSel || null]);
+    totRow.height = 20;
+    totRow.eachCell({ includeEmpty:true }, (cell, col) => {
+      cell.fill = cellFill(C.A_TOTAL_BG);
+      cell.font = headerFont({ color:{ argb:'FF7B4700' } });
+      cell.border = allBorders('medium','FFCC9900');
+      if (col > 1) cell.alignment = { vertical:'middle', horizontal:'center' };
+    });
+
+    // A vizsga időtartama
+    const durRow = wsA.addRow(['A vizsga időtartama', null, null, examDur || null]);
+    durRow.height = 18;
+    durRow.eachCell({ includeEmpty:true }, (cell, col) => {
+      cell.fill = cellFill(C.A_FOOT_BG);
+      cell.font = { name:'Calibri', size:11, italic:true, color:{ argb:'FF444444' } };
+      cell.border = allBorders('hair','FFCCCCCC');
+      if (col === 4) { cell.font = { name:'Calibri', size:11, bold:true, italic:true, color:{ argb:'FF1A3864' } }; cell.alignment = { horizontal:'center' }; }
+    });
+
+    wsA.addRow([]); // blank separator
+
+    // Requirement section
+    [
+      ['Vizsgakövetelmény', null, null, '%'],
+      ['Nem felelt meg',    null, null, '0-79 %'],
+      ['Megfelelt',         null, null, '80-100 %'],
+    ].forEach((row, i) => {
+      const r = wsA.addRow(row);
+      r.height = 18;
+      r.eachCell({ includeEmpty:true }, (cell, col) => {
+        cell.fill = cellFill(i === 0 ? 'FFD9E1F2' : 'FFF5F7FB');
+        cell.font = i === 0
+          ? headerFont({ color:{ argb:'FF1F3864' } })
+          : cellFont({ color:{ argb:'FF333333' } });
+        cell.border = allBorders('hair','FFCCCCCC');
+        if (col === 4) { cell.alignment = { horizontal:'center' }; }
+      });
+    });
+
+    // ── Sheet 3: Formai követelmények ──────────────
+    await buildFormaiSheetEJ(wb);
+
+    // Download
+    const fname = `Moodle_${sheetName.replace(/[^a-zA-Z0-9]/g,'_')}_${ts()}.xlsx`;
+    await xlsxDownload(wb, fname);
+    setStatus('status-lms2moodle','ok',`✓ Downloaded: ${fname}  •  ${globalQ} questions, ${blockOrder.length} blocks — fully styled`);
+
+  } catch(ex) {
+    setStatus('status-lms2moodle','err','Conversion error: '+ex.message);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '⬇ Convert to Moodle';
+  }
+}
+
+// ══════════════════════════════════════════════
+// MOODLE → LMS CONVERSION  (ExcelJS styled)
+// ══════════════════════════════════════════════
+async function convertMoodle2LMS() {
+  if (!moodleData) return;
+  const btn = document.getElementById('btn-moodle2lms');
+  btn.disabled = true; btn.textContent = '⏳ Building…';
+
+  try {
+    const { blocks } = moodleData;
+    const rawPrefix = document.getElementById('moodle-prefix').value.trim();
+    const prefix = rawPrefix ? rawPrefix + '_' : '';
+    const locale = document.getElementById('moodle-locale').value.trim() || 'English';
+    const domain = document.getElementById('moodle-domain').value.trim() || 'OTP Bank Nyrt.';
+
+    const blockCodes = blocks.map((b,i) => {
+      const el = document.getElementById(`moodle-bcode-${i}`);
+      return (el ? el.value.trim() : deriveBlockCode(b.name)) || `BLK${i+1}`;
+    });
+
+    const LMS_HEADERS = [
+      'Question ID (*required)','Locale ID (*required)','Domain ID (*required)','Active','Point Value',
+      'Description','Variant Number (*required)','Question Type (*required)','Available for Exams',
+      'Randomize Answer Choices','Question Default Image ID','Question Text (*required)',
+      'Question Image ID','Question Image Alt Text','Answer Choice Number (*required)',
+      'Answer Default Image ID','Answer Choice Value','Answer Image ID','Answer Image Alt Text',
+      'Is Correct (*required)','Group Number','Is Primary'
+    ];
+
+    // Column widths for LMS
+    const LMS_WIDTHS = [28,12,18,8,10,12,10,28,16,16,12,60,12,18,8,12,60,12,18,12,12,12];
+
+    const EJ = window.ExcelJS;
+    const wb = new EJ.Workbook();
+    wb.creator = 'Quiz Converter'; wb.created = new Date();
+
+    // ── Sheet 1: Question ──────────────────────────
+    const wsQ = wb.addWorksheet('Question', {
+      properties:{ tabColor:{ argb:C.L_HEADER_BG } },
+      views:[{ state:'frozen', ySplit:1 }]
+    });
+    wsQ.columns = LMS_HEADERS.map((h,i) => ({ header:h, key:`c${i}`, width: LMS_WIDTHS[i] || 14 }));
+
+    // Style header row
+    const hRow = wsQ.getRow(1);
+    hRow.height = 28;
+    hRow.eachCell({ includeEmpty:true }, cell => {
+      cell.fill = cellFill(C.L_HEADER_BG);
+      cell.font = headerFont({ color:{ argb:C.L_HEADER_FG }, size:10 });
+      cell.alignment = { vertical:'middle', wrapText:true, horizontal:'center' };
+      cell.border = allBorders('medium','FF0D2040');
+    });
+    // Left-align text cols
+    [0,2,5,11,16].forEach(i => { hRow.getCell(i+1).alignment = { vertical:'middle', wrapText:true, horizontal:'left' }; });
+
+    let globalQ = 0;
+    let groupIdx = 0;
+
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks[bi];
+      const bcode = blockCodes[bi];
+
+      for (const q of block.questions) {
+        globalQ++;
+        const qid = `${prefix}${bcode}_${String(globalQ).padStart(2,'0')}`;
+        const correctCount = q.answers.filter(a => a.isCorrect).length;
+        const qtype = correctCount > 1 ? 'MULTI_CHOICE_MULTIPLE_ANSWER' : 'MULTI_CHOICE_SINGLE_ANSWER';
+        const bgArgb = groupIdx % 2 === 0 ? C.L_GROUP_EVEN : C.L_GROUP_ODD;
+
+        q.answers.forEach((a, ai) => {
+          const isCorr = a.isCorrect === 1;
+          const rowData = new Array(22).fill(null);
+          rowData[0]  = qid;
+          rowData[1]  = locale;
+          rowData[2]  = domain;
+          rowData[3]  = 'Y';
+          rowData[6]  = 1;
+          rowData[7]  = qtype;
+          rowData[11] = q.text;
+          rowData[14] = ai + 1;
+          rowData[16] = a.text;
+          rowData[19] = isCorr ? 'Y' : 'N';
+
+          const r = wsQ.addRow(rowData);
+          r.height = 15;
+
+          r.eachCell({ includeEmpty:true }, (cell, col) => {
+            // Is Correct column (col 20) gets special colour
+            if (col === 20) {
+              cell.fill = cellFill(isCorr ? C.L_CORR_BG : 'FFFFFFFF');
+              cell.font = headerFont({ color:{ argb: isCorr ? C.L_CORR_FG : C.L_WRONG_FG }, size:10 });
+              cell.alignment = { vertical:'middle', horizontal:'center' };
+            } else {
+              cell.fill = cellFill(isCorr ? C.L_CORR_BG : bgArgb);
+              cell.font = cellFont({ size:10 });
+              cell.alignment = { vertical:'middle', wrapText:true };
+            }
+            cell.border = allBorders('hair','FFD0DCF0');
+          });
+          // Bold QID
+          r.getCell(1).font = headerFont({ color:{ argb:'FF1A3864' }, size:10 });
+          // Center numeric/code cols
+          [2,4,5,7,8,9,10,13,15,17,18,21,22].forEach(c => {
+            r.getCell(c).alignment = { vertical:'middle', horizontal:'center' };
+          });
+        });
+        groupIdx++;
+      }
+    }
+
+    // ── Sheet 2: Feedback ─────────────────────────
+    const wsFB = wb.addWorksheet('Feedback', { properties:{ tabColor:{ argb:'FF808080' } } });
+    wsFB.columns = [
+      { header:'Question ID (*required)',       key:'a', width:28 },
+      { header:'LocaleID (*required)',          key:'b', width:14 },
+      { header:'Variant Number (*required)',    key:'c', width:16 },
+      { header:'Feedback (*required)',          key:'d', width:40 },
+      { header:'Feedback Type (*required)',     key:'e', width:20 },
+    ];
+    wsFB.getRow(1).height = 22;
+    wsFB.getRow(1).eachCell(cell => {
+      cell.fill = cellFill('FF505060');
+      cell.font = headerFont({ color:{ argb:'FFFFFFFF' } });
+      cell.alignment = { vertical:'middle', horizontal:'center' };
+    });
+
+    // ── Sheet 3: Objectives ───────────────────────
+    const wsOBJ = wb.addWorksheet('Objectives', { properties:{ tabColor:{ argb:'FF808080' } } });
+    wsOBJ.columns = [
+      { header:'Question ID (*required)', key:'a', width:28 },
+      { header:'Objective ID (*required)',key:'b', width:22 },
+      { header:'Objective Name',          key:'c', width:32 },
+    ];
+    wsOBJ.getRow(1).height = 22;
+    wsOBJ.getRow(1).eachCell(cell => {
+      cell.fill = cellFill('FF505060');
+      cell.font = headerFont({ color:{ argb:'FFFFFFFF' } });
+      cell.alignment = { vertical:'middle', horizontal:'center' };
+    });
+
+    const fname = `LMS_${rawPrefix || 'export'}_${ts()}.xlsx`;
+    await xlsxDownload(wb, fname);
+    setStatus('status-moodle2lms','ok',`✓ Downloaded: ${fname}  •  ${globalQ} questions — fully styled`);
+
+  } catch(ex) {
+    setStatus('status-moodle2lms','err','Conversion error: '+ex.message);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '⬇ Convert to LMS';
+  }
+}
+
+// ══════════════════════════════════════════════
+// VALIDATION
+// ══════════════════════════════════════════════
+function loadValidate(input) { loadValidateFile(input.files[0]); }
+function loadValidateFile(file) {
+  if (!file) return;
+  setStatus('status-val-load','loading','⏳ Reading file…');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      // Detect format
+      if (wb.SheetNames.includes('Question')) {
+        valFormat = 'lms';
+        valData = parseLMSWorkbook(wb);
+        setStatus('status-val-load','ok',`✓ Loaded LMS file: ${file.name}`);
+      } else {
+        const qSheet = wb.SheetNames.find(n => n !== 'Adatok' && !n.startsWith('Formai'));
+        if (!qSheet) return setStatus('status-val-load','err','Cannot detect format — no Question or Kérdések sheet found.');
+        valFormat = 'moodle';
+        valData = parseMoodleWorkbook(wb, qSheet);
+        setStatus('status-val-load','ok',`✓ Loaded Moodle file: ${file.name}`);
+      }
+      document.getElementById('btn-validate').disabled = false;
+      document.getElementById('icon-val').textContent = '✅';
+      document.getElementById('label-val').textContent = file.name;
+      document.getElementById('drop-val').classList.add('file-loaded');
+    } catch(ex) { setStatus('status-val-load','err','Parse error: '+ex.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function runValidation() {
+  if (!valData) return;
+  const issues = valFormat === 'lms' ? validateLMS(valData) : validateMoodle(valData);
+  renderValidationResults(issues);
+}
+
+function validateMoodle(data) {
+  const { blocks, dirtyB = [] } = data;
+  const issues = [];
+  const STANDALONE_TF = /^(igaz|hamis|true|false)\.?$/i;
+  const ALL_OF_ABOVE = /(mindhárom|mindkét|mindegyik|all of the above|all three|none of the above|egyik sem)/i;
+  const PREFIXED_ANS = /^\s*([a-zA-Z]\)|[a-zA-Z]\.|[0-9]+\.|[0-9]+\))\s/;
+
+  // Warn about unexpected Válasz values (e.g. "-" used instead of leaving blank)
+  for (const d of dirtyB) {
+    issues.push({
+      lvl: 'warn',
+      label: 'Invalid Válasz Value',
+      msg: `Row ${d.row}: Válasz column contains "${d.value}" instead of 0, 1, or blank. Treated as blank — check if this is a block header row with a stray character.`
+    });
+  }
+
+  let qNum = 0;
+  let prevQNum = 0;
+
+  for (const block of blocks) {
+    for (const q of block.questions) {
+      qNum++;
+      // Check sequential
+      if (q.num !== qNum) {
+        issues.push({ lvl:'warn', label:'Question Numbering', msg: `Question numbered ${q.num} but expected ${qNum} in block "${block.name}". Possible gap or duplicate.` });
+        qNum = q.num; // resync
+      }
+
+      // Check answers exist
+      if (!q.answers.length) {
+        issues.push({ lvl:'err', label:'Missing Answers', msg: `Q${q.num}: "${shortText(q.text)}" — no answers found.` });
+        continue;
+      }
+
+      const corrCount = q.answers.filter(a => a.isCorrect).length;
+
+      // Multi-correct: need ≥1 incorrect
+      if (corrCount > 1) {
+        const incorrCount = q.answers.filter(a => !a.isCorrect).length;
+        if (incorrCount === 0) {
+          issues.push({ lvl:'err', label:'No Incorrect Answer', msg: `Q${q.num}: multi-correct question has no incorrect answer. Required: ≥1 wrong answer.` });
+        }
+      }
+
+      // No correct answers
+      if (corrCount === 0) {
+        issues.push({ lvl:'err', label:'No Correct Answer', msg: `Q${q.num}: "${shortText(q.text)}" — no correct answer (Válasz=1) found.` });
+      }
+
+      // Validate each answer
+      for (const a of q.answers) {
+        // Prefixed answer
+        if (PREFIXED_ANS.test(a.text)) {
+          issues.push({ lvl:'err', label:'Answer Prefix', msg: `Q${q.num}: answer "${shortText(a.text)}" starts with a letter/number prefix (a., b., 1.). Remove it.` });
+        }
+        // All-of-the-above type
+        if (ALL_OF_ABOVE.test(a.text)) {
+          issues.push({ lvl:'warn', label:'"All of the Above"', msg: `Q${q.num}: answer "${shortText(a.text)}" — Moodle shuffles answers, so this type of answer will be incorrect.` });
+        }
+        // Standalone % without period
+        if (/^\d+(\.\d+)?%$/.test(a.text)) {
+          issues.push({ lvl:'warn', label:'% Without Period', msg: `Q${q.num}: answer "${a.text}" is a standalone percentage — add a period ("${a.text}.") to avoid Moodle converting it to decimal.` });
+        }
+        // Standalone IGAZ/HAMIS/TRUE/FALSE without period
+        if (/^(igaz|hamis|true|false)$/i.test(a.text.trim())) {
+          issues.push({ lvl:'warn', label:'IGAZ/HAMIS Without Period', msg: `Q${q.num}: answer "${a.text}" — standalone IGAZ/HAMIS/TRUE/FALSE should end with period to prevent Moodle displaying TRUE/FALSE.` });
+        }
+      }
+    }
+  }
+
+  if (!issues.length) issues.push({ lvl:'ok', label:'All checks passed', msg:'No issues found in this Moodle file.' });
+  return issues;
+}
+
+function validateLMS(data) {
+  const { questionsMap, order } = data;
+  const issues = [];
+
+  for (const qid of order) {
+    const q = questionsMap[qid];
+    // Required fields
+    if (!q.text) issues.push({ lvl:'err', label:'Missing Question Text', msg: `${qid}: Question Text is empty.` });
+    if (!q.locale) issues.push({ lvl:'err', label:'Missing Locale', msg: `${qid}: Locale ID is empty.` });
+    if (!q.domain) issues.push({ lvl:'err', label:'Missing Domain', msg: `${qid}: Domain ID is empty.` });
+
+    // Valid question type
+    if (!['MULTI_CHOICE_SINGLE_ANSWER','MULTI_CHOICE_MULTIPLE_ANSWER'].includes(q.qtype)) {
+      issues.push({ lvl:'err', label:'Invalid Question Type', msg: `${qid}: Question Type "${q.qtype}" is invalid. Use MULTI_CHOICE_SINGLE_ANSWER or MULTI_CHOICE_MULTIPLE_ANSWER.` });
+    }
+
+    // No answers
+    if (!q.answers.length) {
+      issues.push({ lvl:'err', label:'No Answers', msg: `${qid}: No answer choices found.` });
+      continue;
+    }
+
+    const corrCount = q.answers.filter(a => a.isCorrect).length;
+    const incorrCount = q.answers.filter(a => !a.isCorrect).length;
+
+    // SINGLE must have exactly 1 correct
+    if (q.qtype === 'MULTI_CHOICE_SINGLE_ANSWER' && corrCount !== 1) {
+      issues.push({ lvl:'err', label:'Single Answer Check', msg: `${qid}: SINGLE_ANSWER question has ${corrCount} correct answers (expected exactly 1).` });
+    }
+    // MULTIPLE must have ≥1 correct and ≥1 incorrect
+    if (q.qtype === 'MULTI_CHOICE_MULTIPLE_ANSWER') {
+      if (corrCount === 0) issues.push({ lvl:'err', label:'Multiple Answer Check', msg: `${qid}: MULTIPLE_ANSWER question has no correct answers.` });
+      if (incorrCount === 0) issues.push({ lvl:'err', label:'Multiple Answer Check', msg: `${qid}: MULTIPLE_ANSWER question has no incorrect answers (required ≥1).` });
+    }
+
+    // Is Correct must be Y or N
+    for (const a of q.answers) {
+      const raw = a.isCorrect;
+      // already parsed to 1/0 in our parser, but check original
+    }
+
+    // Empty answer text
+    for (let i = 0; i < q.answers.length; i++) {
+      if (!q.answers[i].text.trim()) {
+        issues.push({ lvl:'warn', label:'Empty Answer Text', msg: `${qid}: Answer #${i+1} has empty text.` });
+      }
+    }
+  }
+
+  if (!issues.length) issues.push({ lvl:'ok', label:'All checks passed', msg:'No issues found in this LMS file.' });
+  return issues;
+}
+
+function renderValidationResults(issues) {
+  const errCount = issues.filter(i => i.lvl === 'err').length;
+  const warnCount = issues.filter(i => i.lvl === 'warn').length;
+  const summary = errCount || warnCount ? `${errCount} errors, ${warnCount} warnings` : '✓ Clean';
+  document.getElementById('val-summary').textContent = summary;
+
+  const body = document.getElementById('val-results-body');
+  body.innerHTML = issues.map(issue => `
+    <div class="val-item val-${issue.lvl}">
+      <div class="val-label">${issue.label}</div>
+      <div>${issue.msg}</div>
+    </div>`).join('');
+
+  document.getElementById('card-val-results').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════
+// FORMAI KÖVETELMÉNYEK SHEET (ExcelJS)
+// ══════════════════════════════════════════════
+async function buildFormaiSheetEJ(wb) {
+  const wsF = wb.addWorksheet('Formai követelmények', {
+    properties:{ tabColor:{ argb:'FF808090' } }
+  });
+  wsF.columns = [
+    { key:'a', width:22 }, { key:'b', width:52 },
+    { key:'c', width:52 }, { key:'d', width:52 },
+  ];
+
+  const RULES = [
+    { type:'title',  cols:[null,'Formai követelmények',null,null] },
+    { type:'colhdr', cols:[null,'1. munkalap: Kérdések',null,'2. munkalap: Adatok fül'] },
+    { type:'rule',   cols:['Használati útmutató:','A 1. Kérdések fülön található a minta, természetesen lehet több/kevesebb válasz is,\nilletve több jó válasz is megjelölhető.\nTöbb jó válaszos kérdés esetén mindenképpen kérünk\nlegalább 1 db hibás választ is.',null,'A 2. munkalapon (Adatok fül) meg kell adni a vizsga paramétereit.'] },
+    { type:'blank' },
+    { type:'rule',   cols:['Egyéb infók, kérések:','Sehol NE legyenek összevont cellák!!',null,'Ez háromféle minta, az igényeknek megfelelően. Általában 70%-os megfelelési szinttel és kérdésenként 1 perces idővel szoktunk dolgozni.\nEz szakterületi igénytől függően változhat.'] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'A válaszok előtt a cellában NE legyenek sorszámok/betűk (pl.: a, b, c, stb.)',null,'Csak az adott fájlhoz/vizsgához kapcsolódó adatot jelenítsük meg ezen a fülön! Minden egyéb, nem szükséges adatot töröljünk!'] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'A kódok minden válasz előtti cellában legyenek: 0 (hamis) vagy 1 (igaz)',null,'A Vizsgakérdés csoportos vizsga esetén, amennyiben részeredményekre is szükség van, ezen a felületen jelenjen meg.'] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'A program a válaszokat is keveri, így NE legyen pl. ilyen válasz: mindhárom fenti válasz helyes.',null,null] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'Amennyiben a válaszokban a % jelet nem szövegkörnyezetben használjuk (pl. 4% a megoldás), akkor kérem, hogy mindenképpen tegyünk egy pontot a végére (4%.), mert különben a program a %-os értéket átalakítja, és így jelenik meg: 0,04','Amennyiben a válasz önmagában álló IGAZ illetve HAMIS, tehát nincs szövegkörnyezetben (válasz: IGAZ), akkor kérem, hogy itt is mindenképpen tegyünk pontot a végére (IGAZ.), mert különben a program TRUE illetve FALSE- ként jeleníti meg a felhasználónak.',null] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'Speciális mezők mellőzése, mert a fordító program átalakítja, és értelmezhetetlenné válik. Ilyen pl. a dátum cella, vagy a pénznem cella.\nMinden ilyen választ "mondatkörnyezetbe" kell tenni.',null,null] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'A fájlbetöltés gördülékenységének biztosítása és a hibás betöltések elkerülése érdekében ragaszkodjunk a jelen formátumhoz, lsd. Első két sor formai megtartása, egyéb oszlopok hozzáadásának mellőzése stb.',null,null] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'Amennyiben szükséges vizsgakérdés csoportok: megnevezésük alá kerüljenek közvetlen felsorolásra a kérdések, hogy a fájl formátuma helyesen kerüljön betöltésre (zöld színnel jelölve a Kérdések fülön).',null,null] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'A C oszlopban NE legyen üres sor a kérdések, válaszok, csoportok között!',null,null] },
+    { type:'blank' },
+    { type:'rule',   cols:[null,'Figyeljünk, hogy a kérdések sorszámai mindenhol hiánytalanul ki legyenek töltve!',null,null] },
+  ];
+
+  RULES.forEach((entry, idx) => {
+    if (entry.type === 'blank') { wsF.addRow([]); return; }
+    const r = wsF.addRow(entry.cols);
+
+    if (entry.type === 'title') {
+      r.height = 30;
+      r.getCell(2).fill = cellFill('FF2D4356');
+      r.getCell(2).font = { name:'Calibri', size:16, bold:true, color:{ argb:'FFFFFFFF' } };
+      r.getCell(2).alignment = { vertical:'middle', horizontal:'center' };
+    } else if (entry.type === 'colhdr') {
+      r.height = 22;
+      [2,4].forEach(col => {
+        r.getCell(col).fill = cellFill(C.A_HDR_BG);
+        r.getCell(col).font = headerFont({ color:{ argb:'FFFFFFFF' } });
+        r.getCell(col).alignment = { vertical:'middle', horizontal:'center' };
+        r.getCell(col).border = allBorders('thin','FF2A5198');
+      });
+    } else if (entry.type === 'rule') {
+      r.height = 14;
+      // label col
+      if (entry.cols[0]) {
+        r.getCell(1).font = headerFont({ color:{ argb:'FF1F3864' }, size:10 });
+      }
+      // rule text columns
+      [2,3,4].forEach(col => {
+        if (entry.cols[col-1]) {
+          const isAlt = idx % 4 < 2;
+          r.getCell(col).fill = cellFill(isAlt ? 'FFF0F4FA' : 'FFFFFFFF');
+          r.getCell(col).font = cellFont({ size:10 });
+          r.getCell(col).alignment = { vertical:'top', wrapText:true };
+          r.getCell(col).border = { left:{ style:'thin', color:{ argb:'FFD0D8E8' } }, right:{ style:'thin', color:{ argb:'FFD0D8E8' } } };
+        }
+      });
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function setStatus(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = 'status show';
+  if (type === 'ok')      el.classList.add('status-ok');
+  else if (type === 'err') el.classList.add('status-err');
+  else if (type === 'warn') el.classList.add('status-warn');
+  else el.className = 'status show'; // loading
+  el.innerHTML = msg;
+}
+
+function shortText(t, n=55) {
+  return t && t.length > n ? t.slice(0,n) + '…' : t;
+}
+
+function ts() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+</script>
+<footer>
+  <span class="footer-logo">
+    <svg width="16" height="16" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="pfg" x1="8" y1="98" x2="88" y2="8" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#f04e18"/>
+          <stop offset="55%" stop-color="#e03a80"/>
+          <stop offset="100%" stop-color="#c838c0"/>
+        </linearGradient>
+      </defs>
+      <rect x="4" y="34" width="63" height="63" rx="16" fill="url(#pfg)"/>
+      <rect x="58" y="4" width="34" height="34" rx="10" fill="url(#pfg)"/>
+    </svg>
+  </span>
+  <span class="footer-text">
+    Built by Asadbek with love
+    <span class="footer-sep">·</span>
+    Questions? <a href="mailto:asadbekmahmudov@shiwaforce.com">asadbekmahmudov@shiwaforce.com</a>
+  </span>
+</footer>
+
+</body>
+</html>
